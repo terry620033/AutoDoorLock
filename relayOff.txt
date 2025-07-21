@@ -1,0 +1,35 @@
+
+pi@adptl01:/etc/init.d $ more relayOff
+#! /bin/sh
+
+### BEGIN INIT INFO
+# Provides:          relayOff
+# Required-Start:    $syslog
+# Required-Stop:
+# X-Start-Before:    rmnologin
+# Default-Start:     2 3 4 5
+# Default-Stop:
+# Short-Description: Turn Off GPIO pins 29 & 31
+# Description: Provide limited super user privileges to specific users.
+### END INIT INFO
+
+set -e
+
+case "$1" in
+  start)
+        echo "Stopping Relay"
+        # Turn 21,22 on which keeps relay off
+        /usr/bin/gpio mode 21 out
+        /usr/bin/gpio mode 22 out
+        /usr/bin/gpio write 21 0
+        /usr/bin/gpio write 22 0
+        ;;
+  stop|reload|restart|force-reload|status)
+        ;;
+  *)
+        echo "Usage: $N {start|stop|restart|force-reload|status}" >&2
+        exit 1
+        ;;
+esac
+
+exit 0

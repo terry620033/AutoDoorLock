@@ -1,0 +1,436 @@
+#!/usr/bin/env python3
+# Date Written : 30-Dec-2019
+
+import RPi.GPIO as GPIO
+import time
+import datetime
+import sys
+import os
+
+#GPIO PINs Usage
+#Ultrasonic PINs
+# For Toilet #1
+# Ultrasonic Sensor : Ceiling
+TRIG1 = 16
+ECHO1 = 32
+# Ultrasonic Sensor : Wall Mount
+TRIG2 = 18
+ECHO2 = 36
+
+# For Toilet #2
+# Ultrasonic Sensor : Ceiling
+TRIG3 = 22
+ECHO3 = 38
+# Ultrasonic Sensor : Wall Mount
+TRIG4 = 24
+ECHO4 = 40
+
+#Relay Pin
+RelayPin1 = 13    # pin13
+RelayPin2 = 15    # pin15
+# Toilet #1 (E107)
+dist01 = 155    # e.g. 155cm 
+dist02 = 90     # e.g. 90cm 
+# Toilet #2 (E108)
+dist03 = 155    # e.g. 155cm
+dist04 = 90     # e.g. 90cm 
+
+# File Buffer Size
+bufsize = 0
+
+start = 0
+stop = 0
+elapsed = 0
+distance = 0
+
+# The following parameters is used to check the user, if it is stay in front of the ultrasonic sensor.
+# Them, the system will trigger the relay switch.
+T1_engaged = "N"
+T2_engaged = "N"
+T1_locked = "N"
+T2_locked = "N"
+T1_usageCnt = 0
+T2_usageCnt = 0
+
+s01_withinRange = "N"
+s02_withinRange = "N"
+s03_withinRange = "N"
+s04_withinRange = "N"
+
+# The following paramters is used to control how the relay shield will be triigered.
+num_of_secs = 3
+s01_count = 0
+s02_count = 0
+s03_count = 0
+s04_count = 0
+StartTime = 800      # e.g. 830 08:30AM
+EndTime   = 1600     # e.g. 16:30 16:30AM
+timeDelay = 3        # Control the trigger relay cycle (in seconds)
+
+# Setup GPIO.
+def setup():
+	GPIO.setmode(GPIO.BOARD)
+        GPIO.setwarnings(False)
+	# Ultrasonic Sensor #1
+	GPIO.setup(TRIG1, GPIO.OUT)
+	GPIO.setup(ECHO1, GPIO.IN)
+	# Ultrasonic Sensor #2
+	GPIO.setup(TRIG2, GPIO.OUT)
+	GPIO.setup(ECHO2, GPIO.IN)
+
+	# Ultrasonic Sensor #3
+	GPIO.setup(TRIG3, GPIO.OUT)
+	GPIO.setup(ECHO3, GPIO.IN)
+	# Ultrasonic Sensor #4
+	GPIO.setup(TRIG4, GPIO.OUT)
+	GPIO.setup(ECHO4, GPIO.IN)
+
+	# Relay #1
+	GPIO.setup(RelayPin1, GPIO.OUT)
+        GPIO.output(RelayPin1, GPIO.HIGH)
+        # Relay #2
+        GPIO.setup(RelayPin2, GPIO.OUT)
+        GPIO.output(RelayPin2, GPIO.HIGH)
+
+
+# Ultrasonic Sensor Checking Distance
+# Ultrasonic Sensor #1 in Toilet #1 (Ceiling)
+def t01_s1():
+	global start
+	global stop
+	global elapsed
+	global distance
+	
+	GPIO.output(TRIG1, True)
+	time.sleep(0.0001)
+	GPIO.output(TRIG1, False)
+	start = time.time()
+	while GPIO.input(ECHO1) == 0:
+	     start = time.time()
+	while GPIO.input(ECHO1) == 1:
+	     stop = time.time()
+	elapsed = stop - start
+	distance = (elapsed * 34300)/2
+	#time.sleep(0.125)
+	return distance
+# Ultrasonic Sensor #2 in Toilet #1 (Wall)
+def t01_s2():
+	global start
+	global stop
+	global elapsed
+	global distance
+
+	GPIO.output(TRIG2, True)
+	time.sleep(0.0001)
+	GPIO.output(TRIG2, False)
+	start = time.time()
+	while GPIO.input(ECHO2) == 0:
+	     start = time.time()
+	while GPIO.input(ECHO2) == 1:
+	     stop = time.time()
+	elapsed = stop - start
+	distance = (elapsed * 34300)/2
+	#time.sleep(0.125)
+	return distance
+
+# Ultrasonic Sensor #3 in Toilet #2 (Ceiling)
+def t02_s3():
+	global start
+	global stop
+	global elapsed
+	global distance
+	
+	GPIO.output(TRIG3, True)
+	time.sleep(0.0001)
+	GPIO.output(TRIG3, False)
+	start = time.time()
+	while GPIO.input(ECHO3) == 0:
+	     start = time.time()
+	while GPIO.input(ECHO3) == 1:
+	     stop = time.time()
+	elapsed = stop - start
+	distance = (elapsed * 34300)/2
+	#time.sleep(0.125)
+	return distance
+# Ultrasonic Sensor #4 in Toilet #2 (Wall)
+def t02_s4():
+	global start
+	global stop
+	global elapsed
+	global distance
+	
+	GPIO.output(TRIG4, True)
+	time.sleep(0.0001)
+	GPIO.output(TRIG4, False)
+	start = time.time()
+	while GPIO.input(ECHO4) == 0:
+	     start = time.time()
+	while GPIO.input(ECHO4) == 1:
+	     stop = time.time()
+	elapsed = stop - start
+	distance = (elapsed * 34300)/2
+	#time.sleep(0.125)
+	return distance
+
+# Trigger the relay switch in order to lock the door.
+def press_lock1_button():
+	#'relay off...'
+	GPIO.output(RelayPin1, GPIO.HIGH)
+	#time.sleep(0.125)
+	time.sleep(0.1)
+	#'...relayd on'
+	GPIO.output(RelayPin1, GPIO.LOW)
+
+def press_lock2_button():
+	#'relay off...'
+	GPIO.output(RelayPin2, GPIO.HIGH)
+	#time.sleep(0.125)
+	time.sleep(0.1)
+	#'...relayd on'
+	GPIO.output(RelayPin2, GPIO.LOW)
+
+def reset_relay():
+	#'...relayd on'
+	GPIO.output(RelayPin1, GPIO.LOW)
+	GPIO.output(RelayPin2, GPIO.LOW)
+
+# Check Toilet #2 was engaged or not.
+def check_T1():
+        global T1_engaged 
+        global T1_usageCnt 
+        global T1_locked 
+	global s01_count
+	global s02_count
+	global s01_withinRange
+	global s02_withinRange
+
+        global dis_1
+        global dis_2
+        global dist01
+        global dist02
+
+	dis_1 = int(t01_s1())
+        print ("Sensor #1", T1_engaged, num_of_secs, s01_count, s01_withinRange, dis_1, dist01)
+
+        if s01_count < num_of_secs and dis_1 <= dist01:
+           s01_count += 1 
+        elif s01_count < num_of_secs and dis_1 > dist01:
+             s01_count = 0 
+             s01_withinRange = "N"
+        elif s01_count >= num_of_secs and dis_1 <= dist01:
+             s01_withinRange = "Y"
+        elif s01_count >= num_of_secs and dis_1 > dist01:
+             s01_withinRange = "N"
+             s01_count = 0 
+
+	dis_2 = int(t01_s2())
+        print ("Sensor #2", T1_engaged, num_of_secs, s02_count, s02_withinRange, dis_2, dist02)
+
+        if s02_count < num_of_secs and dis_2 <= dist02:
+           s02_count += 1 
+        elif s02_count < num_of_secs and dis_2 > dist02:
+             s02_count = 0 
+             s02_withinRange = "N"
+        elif s02_count >= num_of_secs and dis_2 <= dist02:
+             s02_withinRange = "Y"
+        elif s02_count >= num_of_secs and dis_2 > dist02:
+             s02_withinRange = "N"
+             s02_count = 0 
+
+        if (s01_withinRange == "Y" and s02_withinRange == "Y"):
+           T1_engaged = "Y"
+#        elif (s01_withinRange == "N" and s02_withinRange == "N"):
+        elif (s01_withinRange == "N" or s02_withinRange == "N"):
+             T1_engaged = "N"
+        
+        if  T1_engaged == "Y" and T1_locked == "N":
+   	    press_lock1_button()
+            print("Toilet #1 door locked!!!")
+	    logFile.write("Toilet #1 is being engaged at ")
+	    logFile.write(str(time.strftime('%Y-%m-%d %H:%M:%S%p .')))
+	    #logFile.write(str(time.strftime('%Y-%m-%d %H:%M:%S%p / ')))
+	    #logFile.write("user was detected at ")
+	    #logFile.write("(By Sensor #1)")
+	    #logFile.write(str(round(dis_1, 2)))
+	    #logFile.write(", (By Sensor #2)")
+	    #logFile.write(str(round(dis_2, 2)))
+	    #logFile.write("cm\n")
+	    logFile.write("\r\n")
+            print ("Sensor #1", T1_engaged, num_of_secs, s01_count, dis_1, dist01)
+            print ("Sensor #2", T1_engaged, num_of_secs, s02_count, dis_2, dist02)
+	    print (str(time.strftime('%Y-%m-%d %H:%M%p / ')))
+            T1_locked = "Y"
+            T1_usageCnt = 0
+	    return T1_engaged
+        else:
+            dummy_func1()
+           
+def dummy_func1():
+	#time.sleep(0.325)
+        global T1_usageCnt 
+        global T1_locked 
+
+        if T1_locked == "Y":
+           T1_usageCnt += 1
+           if T1_usageCnt > timeDelay:
+              T1_usageCnt = 0
+              T1_locked = "N"
+        print("Toilet #1", T1_locked, T1_usageCnt)
+       
+            
+# Check Toilet #2 was engaged or not.
+def check_T2():
+        global T2_engaged 
+        global T2_usageCnt 
+        global T2_locked 
+	global s03_count
+	global s04_count
+	global s03_withinRange
+	global s04_withinRange
+
+        global dis_3
+        global dis_4
+        global dist03
+        global dist04
+
+	dis_3 = int(t02_s3())
+        print ("Sensor #3", T2_engaged, num_of_secs, s03_count, s03_withinRange, dis_3, dist03)
+        if s03_count < num_of_secs and dis_3 <= dist03:
+           s03_count += 1 
+        elif s03_count < num_of_secs and dis_3 > dist03:
+             s03_count = 0 
+             s03_withinRange = "N"
+        elif s03_count >= num_of_secs and dis_3 <= dist03:
+             s03_withinRange = "Y"
+        elif s03_count >= num_of_secs and dis_3 > dist03:
+             s03_withinRange = "N"
+             s03_count = 0 
+
+	dis_4 = int(t02_s4())
+        print ("Sensor #4", T2_engaged, num_of_secs, s04_count, s04_withinRange, dis_4, dist04)
+        if s04_count < num_of_secs and dis_4 <= dist04:
+           s04_count += 1 
+        elif s04_count < num_of_secs and dis_4 > dist04:
+             s04_count = 0 
+             s04_withinRange = "N"
+        elif s04_count >= num_of_secs and dis_4 <= dist04:
+             s04_withinRange = "Y"
+        elif s04_count >= num_of_secs and dis_4 > dist04:
+             s04_withinRange = "N"
+             s04_count = 0 
+
+        if (s03_withinRange == "Y" and s04_withinRange == "Y"):
+           T2_engaged = "Y"
+#        elif (s03_withinRange == "N" and s04_withinRange == "N"):
+        elif (s03_withinRange == "N" or s04_withinRange == "N"):
+             T2_engaged = "N"
+        
+        if  T2_engaged == "Y" and T2_locked == "N":
+   	    press_lock2_button()
+            print("Toilet #2 door locked!!!")
+	    logFile.write("Toilet #2 is being engaged at ")
+	    logFile.write(str(time.strftime('%Y-%m-%d %H:%M:%S%p .')))
+	    #logFile.write(str(time.strftime('%Y-%m-%d %H:%M:%S%p / ')))
+	    #logFile.write("user was detected at ")
+	    #logFile.write("(By Sensor #3)")
+	    #logFile.write(str(round(dis_3, 2)))
+	    #logFile.write(", (By Sensor #4)")
+	    #logFile.write(str(round(dis_4, 2)))
+	    #logFile.write("cm\n")
+	    logFile.write("\r\n")
+            print ("Sensor #3", T2_engaged, num_of_secs, s03_count, dis_3, dist03)
+            print ("Sensor #4", T2_engaged, num_of_secs, s04_count, dis_4, dist04)
+	    print (str(time.strftime('%Y-%m-%d %H:%M%p / ')))
+            T2_locked = "Y"
+            T2_usageCnt = 0
+	    return T2_engaged
+        else:
+            dummy_func2()
+           
+def dummy_func2():
+	#time.sleep(0.325)
+        global T2_usageCnt 
+        global T2_locked 
+
+        if T2_locked == "Y":
+           T2_usageCnt += 1
+           if T2_usageCnt > timeDelay:
+              T2_usageCnt = 0
+              T2_locked = "N"
+        print("Toilet #2", T2_locked, T2_usageCnt)
+            
+###################################################
+
+def loop():
+        global StartTime
+        global EndTime 
+        global T1_engaged 
+        global T2_engaged 
+        # Endless loop for sending signal to ultrasonic sensor.
+        T1_engaged = "N"
+        T2_engaged = "N"
+
+	global s01_withinRange
+	global s02_withinRange
+	global s03_withinRange
+	global s04_withinRange
+	s01_withinRange = "N"
+	s02_withinRange = "N"
+	s03_withinRange = "N"
+	s04_withinRange = "N"
+        
+        while True:
+            now = datetime.datetime.now()
+            YY = int(now.strftime('%Y'))
+            HHMM = int(now.strftime('%H%M'))
+            MM = int(now.strftime('%M'))
+            WD = int(now.strftime('%w'))
+            print("before check distance", now)
+            print("HHMM = ", HHMM)
+            if YY > 2019:
+               if WD != 0 and WD != 6:
+                  while (HHMM >= StartTime and HHMM <= EndTime):
+		       # Check Toilet #1
+                       # print (YY, HH, MM, WD)
+      		       check_T2()
+                       # Delay Time
+                       #time.sleep(0.5)
+		       # Check Toilet #2
+		       check_T1()
+                       now = datetime.datetime.now()
+                       YY = int(now.strftime('%Y'))
+                       HHMM = int(now.strftime('%H%M'))
+                       MM = int(now.strftime('%M'))
+                       WD = int(now.strftime('%w'))
+                       print("after check distance", now)
+                  else:
+                       time.sleep(10)
+	
+def destroy():
+	GPIO.cleanup()
+
+if __name__ == "__main__":
+	setup()
+        filename = ('/home/pi/ADP/log/'+time.strftime('%Y%m%d-%H%M%p')+'_tls.log')
+        CurrentLog = ('/home/pi/ADP/log/currentLog.log')
+
+        unlink_cmd = 'unlink CurrentLog'
+        os.system(unlink_cmd)
+
+        move_cmd = 'mv /home/pi/ADP/log/*.log /home/pi/ADP/log/oldLog'
+        os.system(move_cmd)
+
+	global logFile
+        logFile = open(filename, 'w+', buffering=bufsize)
+        link_cmd = 'filename CurrentLog'
+        os.symlink(filename, CurrentLog)
+
+	reset_relay()
+	try:
+                reset_relay()
+		loop()
+	except KeyboardInterrupt:
+		pass
+	finally:
+		logFile.close()
+		GPIO.cleanup()

@@ -1,0 +1,5 @@
+
+45 07 * * * sudo shutdown -r now # JOB_ID_10
+@reboot python /home/pi/ADP/adp_tls.py # JOB_ID_12
+@reboot ps -ef | grep adp_tls.py | grep -v grep | awk '{print $2}' > /home/pi/ADP/adp_tls.pid # JOB_ID_13
+
