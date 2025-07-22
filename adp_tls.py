@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Date Written : 30-Dec-2019
-# By: Terry Tse
+# Written By: Terry Tse
 
 import RPi.GPIO as GPIO
 import time
